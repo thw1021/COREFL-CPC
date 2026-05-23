@@ -331,16 +331,23 @@ template<MixtureModel mix_model, int ORDER> __global__ void compute_viscous_flux
   const auto &pv = zone->bv;
   const real u_xi = d_dXi<ORDER>(pv, i, j, k, 1, mx, compute_type[0], compute_type[1]);
   const real u_eta = d_dEta<ORDER>(pv, i, j, k, 1, my, compute_type[2], compute_type[3]);
-  const real u_zeta = d_dZeta<ORDER>(pv, i, j, k, 1, mz, compute_type[4], compute_type[5]);
+  // const real u_zeta = has_zeta ? d_dZeta<ORDER>(pv, i, j, k, 1, mz, compute_type[4], compute_type[5]) : 0;
   const real v_xi = d_dXi<ORDER>(pv, i, j, k, 2, mx, compute_type[0], compute_type[1]);
   const real v_eta = d_dEta<ORDER>(pv, i, j, k, 2, my, compute_type[2], compute_type[3]);
-  const real v_zeta = d_dZeta<ORDER>(pv, i, j, k, 2, mz, compute_type[4], compute_type[5]);
+  // const real v_zeta = has_zeta ? d_dZeta<ORDER>(pv, i, j, k, 2, mz, compute_type[4], compute_type[5]) : 0;
   const real w_xi = d_dXi<ORDER>(pv, i, j, k, 3, mx, compute_type[0], compute_type[1]);
   const real w_eta = d_dEta<ORDER>(pv, i, j, k, 3, my, compute_type[2], compute_type[3]);
-  const real w_zeta = d_dZeta<ORDER>(pv, i, j, k, 3, mz, compute_type[4], compute_type[5]);
+  // const real w_zeta = has_zeta ? d_dZeta<ORDER>(pv, i, j, k, 3, mz, compute_type[4], compute_type[5]) : 0;
   const real t_xi = d_dXi<ORDER>(pv, i, j, k, 5, mx, compute_type[0], compute_type[1]);
   const real t_eta = d_dEta<ORDER>(pv, i, j, k, 5, my, compute_type[2], compute_type[3]);
-  const real t_zeta = d_dZeta<ORDER>(pv, i, j, k, 5, mz, compute_type[4], compute_type[5]);
+  // const real t_zeta = has_zeta ? d_dZeta<ORDER>(pv, i, j, k, 5, mz, compute_type[4], compute_type[5]) : 0;
+  real u_zeta{0}, v_zeta{0}, w_zeta{0}, t_zeta{0};
+  if (mz > 1) {
+    u_zeta = d_dZeta<ORDER>(pv, i, j, k, 1, mz, compute_type[4], compute_type[5]);
+    v_zeta = d_dZeta<ORDER>(pv, i, j, k, 2, mz, compute_type[4], compute_type[5]);
+    w_zeta = d_dZeta<ORDER>(pv, i, j, k, 3, mz, compute_type[4], compute_type[5]);
+    t_zeta = d_dZeta<ORDER>(pv, i, j, k, 5, mz, compute_type[4], compute_type[5]);
+  }
 
   // chain rule for derivative
   const auto &metric = zone->metric;
@@ -375,17 +382,18 @@ template<MixtureModel mix_model, int ORDER> __global__ void compute_viscous_flux
   const real tau_yz = mul * (v_z + w_y);
 
   auto &fv = zone->fFlux, &gv = zone->gFlux, &hv = zone->hFlux;
-  fv(i, j, k, 1) = xi_x * tau_xx + xi_y * tau_xy + xi_z * tau_xz;
-  fv(i, j, k, 2) = xi_x * tau_xy + xi_y * tau_yy + xi_z * tau_yz;
-  fv(i, j, k, 3) = xi_x * tau_xz + xi_y * tau_yz + xi_z * tau_zz;
+  const real jac = zone->jac(i, j, k);
+  fv(i, j, k, 1) = (xi_x * tau_xx + xi_y * tau_xy + xi_z * tau_xz) * jac;
+  fv(i, j, k, 2) = (xi_x * tau_xy + xi_y * tau_yy + xi_z * tau_yz) * jac;
+  fv(i, j, k, 3) = (xi_x * tau_xz + xi_y * tau_yz + xi_z * tau_zz) * jac;
 
-  gv(i, j, k, 1) = eta_x * tau_xx + eta_y * tau_xy + eta_z * tau_xz;
-  gv(i, j, k, 2) = eta_x * tau_xy + eta_y * tau_yy + eta_z * tau_yz;
-  gv(i, j, k, 3) = eta_x * tau_xz + eta_y * tau_yz + eta_z * tau_zz;
+  gv(i, j, k, 1) = (eta_x * tau_xx + eta_y * tau_xy + eta_z * tau_xz) * jac;
+  gv(i, j, k, 2) = (eta_x * tau_xy + eta_y * tau_yy + eta_z * tau_yz) * jac;
+  gv(i, j, k, 3) = (eta_x * tau_xz + eta_y * tau_yz + eta_z * tau_zz) * jac;
 
-  hv(i, j, k, 1) = zeta_x * tau_xx + zeta_y * tau_xy + zeta_z * tau_xz;
-  hv(i, j, k, 2) = zeta_x * tau_xy + zeta_y * tau_yy + zeta_z * tau_yz;
-  hv(i, j, k, 3) = zeta_x * tau_xz + zeta_y * tau_yz + zeta_z * tau_zz;
+  hv(i, j, k, 1) = (zeta_x * tau_xx + zeta_y * tau_xy + zeta_z * tau_xz) * jac;
+  hv(i, j, k, 2) = (zeta_x * tau_xy + zeta_y * tau_yy + zeta_z * tau_yz) * jac;
+  hv(i, j, k, 3) = (zeta_x * tau_xz + zeta_y * tau_yz + zeta_z * tau_zz) * jac;
 
   const real t_x = t_xi * xi_x + t_eta * eta_x + t_zeta * zeta_x;
   const real t_y = t_xi * xi_y + t_eta * eta_y + t_zeta * zeta_y;
@@ -402,9 +410,9 @@ template<MixtureModel mix_model, int ORDER> __global__ void compute_viscous_flux
   const real Ey = u * tau_xy + v * tau_yy + w * tau_yz + conductivity * t_y;
   const real Ez = u * tau_xz + v * tau_yz + w * tau_zz + conductivity * t_z;
 
-  fv(i, j, k, 4) = xi_x * Ex + xi_y * Ey + xi_z * Ez;
-  gv(i, j, k, 4) = eta_x * Ex + eta_y * Ey + eta_z * Ez;
-  hv(i, j, k, 4) = zeta_x * Ex + zeta_y * Ey + zeta_z * Ez;
+  fv(i, j, k, 4) = (xi_x * Ex + xi_y * Ey + xi_z * Ez) * jac;
+  gv(i, j, k, 4) = (eta_x * Ex + eta_y * Ey + eta_z * Ez) * jac;
+  hv(i, j, k, 4) = (zeta_x * Ex + zeta_y * Ey + zeta_z * Ez) * jac;
 }
 
 template<int ORDER> __global__ void compute_viscous_flux_collocated_scalar(DZone *zone, const DParameter *param) {
@@ -440,6 +448,7 @@ template<int ORDER> __global__ void compute_viscous_flux_collocated_scalar(DZone
   const real zeta_x = metric(i, j, k, 6);
   const real zeta_y = metric(i, j, k, 7);
   const real zeta_z = metric(i, j, k, 8);
+  const real jac = zone->jac(i, j, k);
 
   // Here, we only consider the influence of species diffusion.
   // That is, if we are solving mixture or finite rate,
@@ -447,6 +456,7 @@ template<int ORDER> __global__ void compute_viscous_flux_collocated_scalar(DZone
   // If we are solving the flamelet model, this part only contributes to the energy eqn.
   const int n_spec{param->n_spec};
   const auto &y = zone->sv;
+  const bool has_zeta = mz > 1;
 
   real diffusivity[MAX_SPEC_NUMBER];
   real sum_GradXi_cdot_GradY_over_wl{0}, sumGradEta_cdot_GradY_over_wl{0}, sumGradZeta_cdot_GradY_over_wl{0};
@@ -462,15 +472,15 @@ template<int ORDER> __global__ void compute_viscous_flux_collocated_scalar(DZone
 
     const real y_xi = d_dXi<ORDER>(y, i, j, k, l, mx, compute_type[0], compute_type[1]);
     const real y_eta = d_dEta<ORDER>(y, i, j, k, l, my, compute_type[2], compute_type[3]);
-    const real y_zeta = d_dZeta<ORDER>(y, i, j, k, l, mz, compute_type[4], compute_type[5]);
+    const real y_zeta = has_zeta ? d_dZeta<ORDER>(y, i, j, k, l, mz, compute_type[4], compute_type[5]) : 0;
 
     const real y_x = y_xi * xi_x + y_eta * eta_x + y_zeta * zeta_x;
     const real y_y = y_xi * xi_y + y_eta * eta_y + y_zeta * zeta_y;
     const real y_z = y_xi * xi_z + y_eta * eta_z + y_zeta * zeta_z;
     // Term 1, the gradient of mass fraction.
-    const real GradXi_cdot_GradY = xi_x * y_x + xi_y * y_y + xi_z * y_z;
-    const real GradEta_cdot_GradY = eta_x * y_x + eta_y * y_y + eta_z * y_z;
-    const real GradZeta_cdot_GradY = zeta_x * y_x + zeta_y * y_y + zeta_z * y_z;
+    const real GradXi_cdot_GradY = (xi_x * y_x + xi_y * y_y + xi_z * y_z) * jac;
+    const real GradEta_cdot_GradY = (eta_x * y_x + eta_y * y_y + eta_z * y_z) * jac;
+    const real GradZeta_cdot_GradY = (zeta_x * y_x + zeta_y * y_y + zeta_z * y_z) * jac;
     driven_force_x[l] = GradXi_cdot_GradY;
     driven_force_y[l] = GradEta_cdot_GradY;
     driven_force_z[l] = GradZeta_cdot_GradY;
@@ -497,15 +507,15 @@ template<int ORDER> __global__ void compute_viscous_flux_collocated_scalar(DZone
   if (param->gradPInDiffusionFlux) {
     const real p_xi = d_dXi<ORDER>(pv, i, j, k, 4, mx, compute_type[0], compute_type[1]);
     const real p_eta = d_dEta<ORDER>(pv, i, j, k, 4, my, compute_type[2], compute_type[3]);
-    const real p_zeta = d_dZeta<ORDER>(pv, i, j, k, 4, mz, compute_type[4], compute_type[5]);
+    const real p_zeta = has_zeta ? d_dZeta<ORDER>(pv, i, j, k, 4, mz, compute_type[4], compute_type[5]) : 0;
 
     const real p_x{p_xi * xi_x + p_eta * eta_x + p_zeta * zeta_x};
     const real p_y{p_xi * xi_y + p_eta * eta_y + p_zeta * zeta_y};
     const real p_z{p_xi * xi_z + p_eta * eta_z + p_zeta * zeta_z};
 
-    const real gradXi_cdot_gradP_over_p = (xi_x * p_x + xi_y * p_y + xi_z * p_z) / pv(i, j, k, 4);
-    const real gradEta_cdot_gradP_over_p = (eta_x * p_x + eta_y * p_y + eta_z * p_z) / pv(i, j, k, 4);
-    const real gradZeta_cdot_gradP_over_p = (zeta_x * p_x + zeta_y * p_y + zeta_z * p_z) / pv(i, j, k, 4);
+    const real gradXi_cdot_gradP_over_p = (xi_x * p_x + xi_y * p_y + xi_z * p_z) * jac / pv(i, j, k, 4);
+    const real gradEta_cdot_gradP_over_p = (eta_x * p_x + eta_y * p_y + eta_z * p_z) * jac / pv(i, j, k, 4);
+    const real gradZeta_cdot_gradP_over_p = (zeta_x * p_x + zeta_y * p_y + zeta_z * p_z) * jac / pv(i, j, k, 4);
 
     // Velocity correction for the 3rd term
     for (int l = 0; l < n_spec; ++l) {
@@ -551,16 +561,16 @@ template<int ORDER> __global__ void compute_viscous_flux_collocated_scalar(DZone
       // First, compute the passive scalar gradient
       const real ps_xi = d_dXi<ORDER>(sv, i, j, k, ls, mx, compute_type[0], compute_type[1]);
       const real ps_eta = d_dEta<ORDER>(sv, i, j, k, ls, my, compute_type[2], compute_type[3]);
-      const real ps_zeta = d_dZeta<ORDER>(sv, i, j, k, ls, mz, compute_type[4], compute_type[5]);
+      const real ps_zeta = has_zeta ? d_dZeta<ORDER>(sv, i, j, k, ls, mz, compute_type[4], compute_type[5]) : 0;
 
       const real ps_x = ps_xi * xi_x + ps_eta * eta_x + ps_zeta * zeta_x;
       const real ps_y = ps_xi * xi_y + ps_eta * eta_y + ps_zeta * zeta_y;
       const real ps_z = ps_xi * xi_z + ps_eta * eta_z + ps_zeta * zeta_z;
 
       const real rhoD{zone->mul(i, j, k) / param->sc_ps[l]};
-      fv(i, j, k, lc) = rhoD * (xi_x * ps_x + xi_y * ps_y + xi_z * ps_z);
-      gv(i, j, k, lc) = rhoD * (eta_x * ps_x + eta_y * ps_y + eta_z * ps_z);
-      hv(i, j, k, lc) = rhoD * (zeta_x * ps_x + zeta_y * ps_y + zeta_z * ps_z);
+      fv(i, j, k, lc) = rhoD * (xi_x * ps_x + xi_y * ps_y + xi_z * ps_z) * jac;
+      gv(i, j, k, lc) = rhoD * (eta_x * ps_x + eta_y * ps_y + eta_z * ps_z) * jac;
+      hv(i, j, k, lc) = rhoD * (zeta_x * ps_x + zeta_y * ps_y + zeta_z * ps_z) * jac;
     }
   }
 }
@@ -589,25 +599,25 @@ template<int ORDER> __global__ void compute_viscous_flux_derivative(DZone *zone,
 
   const int nv = param->n_var;
   auto &dq = zone->dq;
-  const auto &fv = zone->fFlux, &gv = zone->gFlux, hv = zone->hFlux;
-  const real jac = zone->jac(i, j, k);
+  const auto &fv = zone->fFlux, &gv = zone->gFlux, &hv = zone->hFlux;
+  const bool has_zeta = mz > 1;
 
   dq(i, j, k, 1) += (d_dXi<ORDER>(fv, i, j, k, 1, mx, compute_type[0], compute_type[1])
                      + d_dEta<ORDER>(gv, i, j, k, 1, my, compute_type[2], compute_type[3])
-                     + d_dZeta<ORDER>(hv, i, j, k, 1, mz, compute_type[4], compute_type[5])) * jac;
+                     + (has_zeta ? d_dZeta<ORDER>(hv, i, j, k, 1, mz, compute_type[4], compute_type[5]) : 0));
   dq(i, j, k, 2) += (d_dXi<ORDER>(fv, i, j, k, 2, mx, compute_type[0], compute_type[1])
                      + d_dEta<ORDER>(gv, i, j, k, 2, my, compute_type[2], compute_type[3])
-                     + d_dZeta<ORDER>(hv, i, j, k, 2, mz, compute_type[4], compute_type[5])) * jac;
+                     + (has_zeta ? d_dZeta<ORDER>(hv, i, j, k, 2, mz, compute_type[4], compute_type[5]) : 0));
   dq(i, j, k, 3) += (d_dXi<ORDER>(fv, i, j, k, 3, mx, compute_type[0], compute_type[1])
                      + d_dEta<ORDER>(gv, i, j, k, 3, my, compute_type[2], compute_type[3])
-                     + d_dZeta<ORDER>(hv, i, j, k, 3, mz, compute_type[4], compute_type[5])) * jac;
+                     + (has_zeta ? d_dZeta<ORDER>(hv, i, j, k, 3, mz, compute_type[4], compute_type[5]) : 0));
   dq(i, j, k, 4) += (d_dXi<ORDER>(fv, i, j, k, 4, mx, compute_type[0], compute_type[1])
                      + d_dEta<ORDER>(gv, i, j, k, 4, my, compute_type[2], compute_type[3])
-                     + d_dZeta<ORDER>(hv, i, j, k, 4, mz, compute_type[4], compute_type[5])) * jac;
+                     + (has_zeta ? d_dZeta<ORDER>(hv, i, j, k, 4, mz, compute_type[4], compute_type[5]) : 0));
   for (int l = 5; l < nv; ++l) {
     dq(i, j, k, l) += (d_dXi<ORDER>(fv, i, j, k, l, mx, compute_type[0], compute_type[1])
                        + d_dEta<ORDER>(gv, i, j, k, l, my, compute_type[2], compute_type[3])
-                       + d_dZeta<ORDER>(hv, i, j, k, l, mz, compute_type[4], compute_type[5])) * jac;
+                       + (has_zeta ? d_dZeta<ORDER>(hv, i, j, k, l, mz, compute_type[4], compute_type[5]) : 0));
   }
 }
 
