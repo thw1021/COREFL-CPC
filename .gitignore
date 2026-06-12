@@ -1,0 +1,11 @@
+build/
+corefl
+__pycache__/
+boundary_condition/
+grid/
+output/
+grid_allocate_info.txt
+*.inp
+*.xyz
+history.dat
+Man, we are Finished.txt

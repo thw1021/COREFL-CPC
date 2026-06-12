@@ -9,13 +9,13 @@
 cmake_minimum_required(VERSION 3.23)
 
 if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-  set(CMAKE_CUDA_ARCHITECTURES 60)
+  set(CMAKE_CUDA_ARCHITECTURES 86)
 endif()
 
 add_compile_definitions(MAX_SPEC_NUMBER=9)
-add_compile_definitions(MAX_REAC_NUMBER=19)
+add_compile_definitions(MAX_REAC_NUMBER=20)
 add_compile_definitions(MAX_PASSIVE_SCALAR_NUMBER=1)
-add_compile_definitions(Combustion2Part)
+add_compile_definitions(HighTempMultiPart)
 
 project(COREFL-CPC CUDA CXX)
 
